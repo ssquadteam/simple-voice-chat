@@ -67,7 +67,13 @@ public class PaperNetManager extends NetManager {
 
     @Override
     public void sendToClient(Packet<?> packet, ServerPlayer player) {
+        if (!player.connection.isAcceptingMessages()) {
+            return;
+        }
         Bukkit.getGlobalRegionScheduler().run(VoicechatPaperPlugin.INSTANCE, (t) -> {
+            if (!player.connection.isAcceptingMessages()) {
+                return;
+            }
             FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
             packet.toBytes(buffer);
             byte[] bytes = new byte[buffer.readableBytes()];
