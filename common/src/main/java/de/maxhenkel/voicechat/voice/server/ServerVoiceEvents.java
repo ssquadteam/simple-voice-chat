@@ -43,13 +43,12 @@ public class ServerVoiceEvents {
         CommonCompatibilityManager.INSTANCE.onPlayerCompatibilityCheckSucceeded(this::playerCompatibilityCheckSucceeded);
 
         CommonCompatibilityManager.INSTANCE.getNetManager().requestSecretChannel.setServerListener((player, packet) -> {
-            Voicechat.LOGGER.info("Received secret request of {} ({})", player.getName().getString(), packet.getCompatibilityVersion());
-            clientCompatibilities.put(player.getUUID(), packet.getCompatibilityVersion());
             if (packet.getCompatibilityVersion() != Voicechat.COMPATIBILITY_VERSION) {
+                clientCompatibilities.put(player.getUUID(), packet.getCompatibilityVersion());
                 Voicechat.LOGGER.warn("Connected client {} has incompatible voice chat version (server={}, client={})", player.getName().getString(), Voicechat.COMPATIBILITY_VERSION, packet.getCompatibilityVersion());
                 player.sendSystemMessage(getIncompatibleMessage(packet.getCompatibilityVersion()));
             } else {
-                initializePlayerConnection(player);
+                initializePlayerConnection(player, packet.getCompatibilityVersion());
             }
         });
     }
@@ -99,19 +98,27 @@ public class ServerVoiceEvents {
         }
     }
 
-    public void initializePlayerConnection(ServerPlayer player) {
+    public void initializePlayerConnection(ServerPlayer player, int clientCompatibilityVersion) {
         if (server == null) {
             return;
         }
-        CommonCompatibilityManager.INSTANCE.emitPlayerCompatibilityCheckSucceeded(player);
 
         Secret secret = server.generateNewSecret(player.getUUID());
         if (secret == null) {
-            Voicechat.LOGGER.warn("Player already requested secret - ignoring");
+            Voicechat.LOGGER.debug("Player {} already requested voice chat secret - ignoring", player.getName().getString());
             return;
         }
+
+        Voicechat.LOGGER.info("Received secret request of {} ({})", player.getName().getString(), clientCompatibilityVersion);
+        clientCompatibilities.put(player.getUUID(), clientCompatibilityVersion);
+        CommonCompatibilityManager.INSTANCE.emitPlayerCompatibilityCheckSucceeded(player);
+
         NetManager.sendToClient(player, new SecretPacket(player, secret, server.getPort(), Voicechat.SERVER_CONFIG));
         Voicechat.LOGGER.info("Sent secret to {}", player.getName().getString());
+    }
+
+    public void initializePlayerConnection(ServerPlayer player) {
+        initializePlayerConnection(player, Voicechat.COMPATIBILITY_VERSION);
     }
 
     public void playerLoggedIn(ServerPlayer serverPlayer) {

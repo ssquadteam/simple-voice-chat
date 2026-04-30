@@ -27,6 +27,7 @@ import org.bukkit.event.player.PlayerShowEntityEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 
+import javax.annotation.Nullable;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +36,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class PaperCommonCompatibilityManager extends CommonCompatibilityManager implements Listener {
+
+    private static final String LUCKPERMS_PLUGIN = "LuckPerms";
+    private static final String SPEAK_PERMISSION = "voicechat.speak";
 
     private final List<Consumer<MinecraftServer>> serverStartingEvents;
     private final List<Consumer<MinecraftServer>> serverStoppingEvents;
@@ -252,6 +256,34 @@ public class PaperCommonCompatibilityManager extends CommonCompatibilityManager 
     @Override
     public boolean canSee(ServerPlayer player, ServerPlayer other) {
         return player.getBukkitEntity().canSee(other.getBukkitEntity());
+    }
+
+    @Override
+    public boolean supportsSpeakPermissionOverride() {
+        return Bukkit.getPluginManager().isPluginEnabled(LUCKPERMS_PLUGIN);
+    }
+
+    @Override
+    public boolean setSpeakPermissionDenied(ServerPlayer player, @Nullable String duration) {
+        if (!supportsSpeakPermissionOverride()) {
+            return false;
+        }
+        String playerName = player.getGameProfile().name();
+        String command = duration == null
+                ? "lp user %s permission set %s false".formatted(playerName, SPEAK_PERMISSION)
+                : "lp user %s permission settemp %s false %s".formatted(playerName, SPEAK_PERMISSION, duration);
+        return Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+    }
+
+    @Override
+    public boolean clearSpeakPermissionDenied(ServerPlayer player) {
+        if (!supportsSpeakPermissionOverride()) {
+            return false;
+        }
+        String playerName = player.getGameProfile().name();
+        boolean temporary = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user %s permission unsettemp %s".formatted(playerName, SPEAK_PERMISSION));
+        boolean permanent = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user %s permission unset %s".formatted(playerName, SPEAK_PERMISSION));
+        return temporary || permanent;
     }
 
     @Override

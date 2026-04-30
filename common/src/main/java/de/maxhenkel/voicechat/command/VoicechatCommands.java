@@ -28,20 +28,38 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.PermissionLevel;
 
 import javax.annotation.Nullable;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class VoicechatCommands {
 
     public static final String VOICECHAT_COMMAND = "voicechat";
+    public static final String SVC_COMMAND = "svc";
+    public static final String SVC_COMMAND_UPPER = "SVC";
+    private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$");
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         LiteralArgumentBuilder<CommandSourceStack> literalBuilder = Commands.literal(VOICECHAT_COMMAND);
 
         literalBuilder.executes(commandSource -> help(dispatcher, commandSource));
         literalBuilder.then(Commands.literal("help").executes(commandSource -> help(dispatcher, commandSource)));
+
+        literalBuilder.then(Commands.literal("mute").requires((commandSource) -> checkPermission(commandSource, PermissionManager.INSTANCE.MUTE_PERMISSION)).then(Commands.argument("target", EntityArgument.player()).executes((commandSource) -> {
+            return mute(commandSource.getSource(), EntityArgument.getPlayer(commandSource, "target"), null, null);
+        }).then(Commands.argument("duration", StringArgumentType.word()).executes((commandSource) -> {
+            return mute(commandSource.getSource(), EntityArgument.getPlayer(commandSource, "target"), StringArgumentType.getString(commandSource, "duration"), null);
+        }).then(Commands.argument("reason", StringArgumentType.greedyString()).executes((commandSource) -> {
+            return mute(commandSource.getSource(), EntityArgument.getPlayer(commandSource, "target"), StringArgumentType.getString(commandSource, "duration"), StringArgumentType.getString(commandSource, "reason"));
+        })))));
+
+        literalBuilder.then(Commands.literal("unmute").requires((commandSource) -> checkPermission(commandSource, PermissionManager.INSTANCE.MUTE_PERMISSION)).then(Commands.argument("target", EntityArgument.player()).executes((commandSource) -> {
+            return unmute(commandSource.getSource(), EntityArgument.getPlayer(commandSource, "target"));
+        })));
 
         literalBuilder.then(Commands.literal("test").requires((commandSource) -> checkPermission(commandSource, PermissionManager.INSTANCE.ADMIN_PERMISSION)).then(Commands.argument("target", EntityArgument.player()).executes((commandSource) -> {
             if (checkNoVoicechat(commandSource)) {
@@ -198,6 +216,131 @@ public class VoicechatCommands {
         }));
 
         dispatcher.register(literalBuilder);
+        dispatcher.register(Commands.literal(SVC_COMMAND).redirect(dispatcher.getRoot().getChild(VOICECHAT_COMMAND)));
+        dispatcher.register(Commands.literal(SVC_COMMAND_UPPER).redirect(dispatcher.getRoot().getChild(VOICECHAT_COMMAND)));
+    }
+
+    private static int mute(CommandSourceStack source, ServerPlayer target, @Nullable String durationInput, @Nullable String reason) {
+        Server server = Voicechat.SERVER.getServer();
+        if (server == null) {
+            source.sendSuccess(() -> Component.translatable("message.voicechat.voice_chat_unavailable"), false);
+            return 1;
+        }
+
+        @Nullable Duration duration = null;
+        if (durationInput != null) {
+            try {
+                duration = parseDuration(durationInput);
+            } catch (IllegalArgumentException e) {
+                source.sendFailure(Component.translatable("message.voicechat.mute.invalid_duration"));
+                return 0;
+            }
+        }
+
+        if (!CommonCompatibilityManager.INSTANCE.supportsSpeakPermissionOverride()) {
+            source.sendFailure(Component.translatable("message.voicechat.mute.permission_backend_unavailable"));
+            return 0;
+        }
+
+        String moderator = source.getTextName();
+        String normalizedReason = normalizeReason(reason);
+        String formattedDuration = formatDuration(duration);
+        if (!CommonCompatibilityManager.INSTANCE.setSpeakPermissionDenied(target, durationInput)) {
+            source.sendFailure(Component.translatable("message.voicechat.mute.failed", target.getDisplayName()));
+            return 0;
+        }
+
+        target.sendSystemMessage(Component.translatable("message.voicechat.mute.target", formattedDuration, normalizedReason));
+        notifyMutePermissionHolders(source, target, Component.translatable("message.voicechat.mute.notify", moderator, target.getDisplayName(), formattedDuration, normalizedReason));
+        source.sendSuccess(() -> Component.translatable("message.voicechat.mute.success", target.getDisplayName(), formattedDuration), false);
+        return 1;
+    }
+
+    private static int unmute(CommandSourceStack source, ServerPlayer target) {
+        Server server = Voicechat.SERVER.getServer();
+        if (server == null) {
+            source.sendSuccess(() -> Component.translatable("message.voicechat.voice_chat_unavailable"), false);
+            return 1;
+        }
+
+        if (!CommonCompatibilityManager.INSTANCE.supportsSpeakPermissionOverride()) {
+            source.sendFailure(Component.translatable("message.voicechat.mute.permission_backend_unavailable"));
+            return 0;
+        }
+
+        if (!CommonCompatibilityManager.INSTANCE.clearSpeakPermissionDenied(target)) {
+            source.sendFailure(Component.translatable("message.voicechat.unmute.failed", target.getDisplayName()));
+            return 0;
+        }
+
+        String moderator = source.getTextName();
+        target.sendSystemMessage(Component.translatable("message.voicechat.unmute.target"));
+        notifyMutePermissionHolders(source, target, Component.translatable("message.voicechat.unmute.notify", moderator, target.getDisplayName()));
+        source.sendSuccess(() -> Component.translatable("message.voicechat.unmute.success", target.getDisplayName()), false);
+        return 1;
+    }
+
+    private static Duration parseDuration(String input) {
+        Matcher matcher = DURATION_PATTERN.matcher(input.toLowerCase());
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid duration");
+        }
+
+        long amount = Long.parseLong(matcher.group(1));
+        if (amount <= 0L) {
+            throw new IllegalArgumentException("Invalid duration");
+        }
+
+        try {
+            Duration duration = switch (matcher.group(2)) {
+                case "s" -> Duration.ofSeconds(amount);
+                case "m" -> Duration.ofMinutes(amount);
+                case "h" -> Duration.ofHours(amount);
+                case "d" -> Duration.ofDays(amount);
+                default -> throw new IllegalArgumentException("Invalid duration");
+            };
+            duration.toMillis();
+            return duration;
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Invalid duration", e);
+        }
+    }
+
+    private static String formatDuration(@Nullable Duration duration) {
+        if (duration == null) {
+            return "permanently";
+        }
+
+        long seconds = duration.getSeconds();
+        if (seconds % 86_400L == 0L) {
+            return "%sd".formatted(seconds / 86_400L);
+        }
+        if (seconds % 3_600L == 0L) {
+            return "%sh".formatted(seconds / 3_600L);
+        }
+        if (seconds % 60L == 0L) {
+            return "%sm".formatted(seconds / 60L);
+        }
+        return "%ss".formatted(seconds);
+    }
+
+    private static String normalizeReason(@Nullable String reason) {
+        if (reason == null || reason.trim().isEmpty()) {
+            return "No reason provided";
+        }
+        return reason.trim();
+    }
+
+    private static void notifyMutePermissionHolders(CommandSourceStack source, ServerPlayer target, Component message) {
+        for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
+            if (player.getUUID().equals(target.getUUID())) {
+                continue;
+            }
+            if (!PermissionManager.INSTANCE.MUTE_NOTIFY_PERMISSION.hasPermission(player)) {
+                continue;
+            }
+            player.sendSystemMessage(message);
+        }
     }
 
     private static Server joinGroup(CommandSourceStack source) throws CommandSyntaxException {
