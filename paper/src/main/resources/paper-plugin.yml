@@ -23,6 +23,12 @@ permissions:
   voicechat.admin:
     description: Use admin commands
     default: op
+  voicechat.mute:
+    description: Mute players in voice chat
+    default: op
+  voicechat.mute.notify:
+    description: See voice chat moderation notifications
+    default: op
 dependencies:
   - name: ViaVersion
     required: false

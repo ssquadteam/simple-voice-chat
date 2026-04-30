@@ -14,6 +14,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
+import javax.annotation.Nullable;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -91,6 +92,18 @@ public abstract class CommonCompatibilityManager {
     }
 
     public abstract boolean canSee(ServerPlayer player, ServerPlayer other);
+
+    public boolean supportsSpeakPermissionOverride() {
+        return false;
+    }
+
+    public boolean setSpeakPermissionDenied(ServerPlayer player, @Nullable String duration) {
+        return false;
+    }
+
+    public boolean clearSpeakPermissionDenied(ServerPlayer player) {
+        return false;
+    }
 
     public void execute(MinecraftServer server, Runnable runnable) {
         server.execute(runnable);
