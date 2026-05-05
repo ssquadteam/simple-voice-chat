@@ -128,6 +128,7 @@
   "message.voicechat.recording.disabled": "Press to start recording.",
   "message.voicechat.recording.enabled": "Press to stop recording.",
   "message.voicechat.no_speak_permission": "You do not have permission to speak",
+  "message.voicechat.chat_muted": "You cannot speak in voice chat while muted in chat",
   "message.voicechat.mute.invalid_duration": "Invalid duration. Use values like 30m, 1h, 7d, or 27h.",
   "message.voicechat.mute.permission_backend_unavailable": "Voice mutes require LuckPerms on Paper.",
   "message.voicechat.mute.failed": "Failed to voice mute %s",

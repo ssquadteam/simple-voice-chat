@@ -34,6 +34,8 @@ dependencies:
     required: false
   - name: PlaceholderAPI
     required: false
+  - name: LiteBans
+    required: false
 load-before:
   - name: ViaVersion
     boostrap: false

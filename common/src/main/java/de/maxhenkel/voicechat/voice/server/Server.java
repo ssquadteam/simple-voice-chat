@@ -360,6 +360,12 @@ public class Server extends Thread {
             });
             return;
         }
+        if (CommonCompatibilityManager.INSTANCE.isChatMutedForVoiceChat(player)) {
+            CooldownTimer.run("chat-muted-" + playerUuid, 30_000L, () -> {
+                player.displayClientMessage(Component.translatable("message.voicechat.chat_muted"), true);
+            });
+            return;
+        }
         PlayerState state = playerStateManager.getState(player.getUUID());
         if (state == null) {
             return;
