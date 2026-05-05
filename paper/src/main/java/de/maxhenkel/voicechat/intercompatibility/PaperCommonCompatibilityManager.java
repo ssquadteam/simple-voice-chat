@@ -5,6 +5,7 @@ import de.maxhenkel.voicechat.BukkitUtils;
 import de.maxhenkel.voicechat.VoicechatPaperPlugin;
 import de.maxhenkel.voicechat.api.VoicechatPlugin;
 import de.maxhenkel.voicechat.api.VoicechatServerApi;
+import de.maxhenkel.voicechat.integration.litebans.LiteBansMuteIntegration;
 import de.maxhenkel.voicechat.net.NetManager;
 import de.maxhenkel.voicechat.net.PaperNetManager;
 import de.maxhenkel.voicechat.permission.PaperPermissionManager;
@@ -28,6 +29,7 @@ import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 
 import javax.annotation.Nullable;
+import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +40,7 @@ import java.util.function.Consumer;
 public class PaperCommonCompatibilityManager extends CommonCompatibilityManager implements Listener {
 
     private static final String LUCKPERMS_PLUGIN = "LuckPerms";
+    private static final String LITEBANS_PLUGIN = "LiteBans";
     private static final String SPEAK_PERMISSION = "voicechat.speak";
 
     private final List<Consumer<MinecraftServer>> serverStartingEvents;
@@ -50,6 +53,8 @@ public class PaperCommonCompatibilityManager extends CommonCompatibilityManager 
     private final List<Consumer<ServerPlayer>> voicechatConnectEvents;
     private final List<Consumer<ServerPlayer>> voicechatCompatibilityCheckSucceededEvents;
     private final List<Consumer<UUID>> voicechatDisconnectEvents;
+    @Nullable
+    private LiteBansMuteIntegration liteBansMuteIntegration;
 
     public PaperCommonCompatibilityManager() {
         serverStartingEvents = new CopyOnWriteArrayList<>();
@@ -284,6 +289,27 @@ public class PaperCommonCompatibilityManager extends CommonCompatibilityManager 
         boolean temporary = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user %s permission unsettemp %s".formatted(playerName, SPEAK_PERMISSION));
         boolean permanent = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "lp user %s permission unset %s".formatted(playerName, SPEAK_PERMISSION));
         return temporary || permanent;
+    }
+
+    @Override
+    public boolean isChatMutedForVoiceChat(ServerPlayer player) {
+        if (!Bukkit.getPluginManager().isPluginEnabled(LITEBANS_PLUGIN)) {
+            liteBansMuteIntegration = null;
+            return false;
+        }
+        if (liteBansMuteIntegration == null) {
+            liteBansMuteIntegration = new LiteBansMuteIntegration();
+        }
+        return liteBansMuteIntegration.isMuted(player.getUUID(), getIpAddress(player));
+    }
+
+    @Nullable
+    private static String getIpAddress(ServerPlayer player) {
+        InetSocketAddress address = player.getBukkitEntity().getAddress();
+        if (address == null || address.getAddress() == null) {
+            return null;
+        }
+        return address.getAddress().getHostAddress();
     }
 
     @Override

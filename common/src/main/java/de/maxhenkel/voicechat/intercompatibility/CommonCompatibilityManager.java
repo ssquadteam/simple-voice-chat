@@ -105,6 +105,10 @@ public abstract class CommonCompatibilityManager {
         return false;
     }
 
+    public boolean isChatMutedForVoiceChat(ServerPlayer player) {
+        return false;
+    }
+
     public void execute(MinecraftServer server, Runnable runnable) {
         server.execute(runnable);
     }

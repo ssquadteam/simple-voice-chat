@@ -14,6 +14,7 @@ apply from: "https://raw.githubusercontent.com/henkelmax/mod-gradle-scripts/${mo
 repositories {
     maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
     maven { url = 'https://repo.viaversion.com/' }
+    maven { url = 'https://repo.codemc.io/repository/maven-public/' }
 }
 
 dependencies {
@@ -30,6 +31,7 @@ dependencies {
 
     compileOnly "com.viaversion:viaversion-bukkit:${viaversion_version}"
     compileOnly "com.viaversion:viaversion-common:${viaversion_version}"
+    compileOnly "litebans:api:0.6.1"
 }
 
 tasks {
